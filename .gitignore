@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+client/node_modules/
+client/dist/
+client/coverage/
+client/playwright-report/
+client/test-results/
+.env
+.env.*
+!.env.example
+server/.env
+server/dist/
