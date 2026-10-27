@@ -44,6 +44,14 @@ describe('TeamFlow API', () => {
     expect(response.body.data.status).toBe('ok')
   })
 
+  it('does not grant credentialed CORS access to an untrusted origin', async () => {
+    const trusted = await request(app).get('/api/v1/health').set('Origin', 'http://localhost:5173')
+    const untrusted = await request(app).get('/api/v1/health').set('Origin', 'https://untrusted.example')
+    expect(trusted.headers['access-control-allow-origin']).toBe('http://localhost:5173')
+    expect(trusted.headers['access-control-allow-credentials']).toBe('true')
+    expect(untrusted.headers['access-control-allow-origin']).toBeUndefined()
+  })
+
   it('reports database readiness and blocks direct membership creation', async (ctx) => {
     if (!databaseAvailable) ctx.skip()
     expect((await request(app).get('/api/v1/health/ready')).status).toBe(200)
@@ -63,7 +71,10 @@ describe('TeamFlow API', () => {
     const workspace = registered.body.data.workspace.id
     expect((await agent.get('/api/v1/auth/me').set('x-workspace-id', workspace)).status).toBe(200)
     expect((await request(app).post('/api/v1/auth/login').send({ email, password: 'wrong password' })).status).toBe(401)
-    expect((await agent.post('/api/v1/auth/logout')).status).toBe(200)
+    const logout = await agent.post('/api/v1/auth/logout')
+    expect(logout.status).toBe(200)
+    expect(String(logout.headers['set-cookie'] || '')).toContain('teamflow_session=;')
+    expect(String(logout.headers['set-cookie'] || '')).toContain('SameSite=Lax')
     expect((await agent.get('/api/v1/auth/me').set('x-workspace-id', workspace)).status).toBe(401)
   })
 
