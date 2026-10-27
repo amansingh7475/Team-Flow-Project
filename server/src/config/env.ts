@@ -12,7 +12,10 @@ const schema = z.object({
   API_RATE_LIMIT: z.coerce.number().int().positive().default(120),
   SESSION_SECRET: z.string().min(32).optional(),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
-  INVITATION_DELIVERY_URL: z.string().url().optional(),
+  INVITATION_DELIVERY_URL: z.preprocess(
+  (value) => value === "" ? undefined : value,
+  z.string().url().optional()
+),
   SESSION_COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),
   SESSION_COOKIE_SECURE: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
 }).superRefine((value, ctx) => {
