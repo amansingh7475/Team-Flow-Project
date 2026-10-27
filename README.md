@@ -1,3 +1,10 @@
+# TeamFlow – MERN Stack Project
+
+**Live Demo:** https://team-flow-project-liart.vercel.app
+
+**GitHub Repository:** https://github.com/amansingh7475/Team-Flow-Project
+
+
 # TeamFlow
 
 TeamFlow is a React/Vite workspace UI with an independently runnable Express, TypeScript, MongoDB, Mongoose, and Socket.IO API. The repository is split into `client/` and `server/` so each deploys independently.
