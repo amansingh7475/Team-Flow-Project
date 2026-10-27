@@ -23,6 +23,8 @@ For local HTTP development use `SESSION_COOKIE_SAME_SITE=lax` and `SESSION_COOKI
 
 Request validation bounds externally supplied collections before database work: projects accept at most 100 member IDs (128 characters each), and tasks accept at most 20 labels (50 characters each). JSON request bodies remain limited to 100 KB. These are API safety limits, not pagination limits; larger collaboration sets should use separate workspace records.
 
+Kanban task `order` values are intentionally restricted to finite safe integers because they represent discrete positions; fractional or infinite ordering values are rejected.
+
 ## Data contract
 
 The frontend mock service stores `Project` records with `id`, `name`, `code`, `color`, `description`, optional `startDate`, `due`, `members`, and `state`. `Task` records contain `id`, `title`, `description`, `projectId`, `status`, `priority`, `due`, `assignee`, `initials`, `tone`, `labels`, and `comments`. Mongo documents use ObjectIds and timestamps; serializers expose stable `id` strings and the same semantic fields.

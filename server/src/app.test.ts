@@ -91,6 +91,33 @@ describe('TeamFlow API', () => {
     expect((await agent.delete(`/api/v1/projects/${id}`).set(projectHeaders)).status).toBe(200)
   })
 
+  it('preserves omitted project and task fields during partial updates', async (ctx) => {
+    if (!databaseAvailable) ctx.skip()
+    const agent = request.agent(app)
+    const registered = await agent.post('/api/v1/auth/register').send({ name: 'Patch User', email: `patch-${Date.now()}@teamflow.local`, password: 'correct horse battery staple', workspaceName: 'Patch Workspace' })
+    const workspaceHeaders = { 'x-workspace-id': registered.body.data.workspace.id }
+    const userId = registered.body.data.user.id
+    const project = await agent.post('/api/v1/projects').set(workspaceHeaders).send({ name: 'Original project', code: 'PATCH', description: 'Keep this description', state: 'At risk', memberIds: [userId] })
+    const projectId = project.body.data.id
+    const task = await agent.post('/api/v1/tasks').set(workspaceHeaders).send({ title: 'Original task', description: 'Keep this task description', projectId, status: 'progress', priority: 'High', labels: ['keep'], order: 2 })
+    const taskId = task.body.data.id
+
+    expect((await agent.patch(`/api/v1/projects/${projectId}`).set(workspaceHeaders).send({ name: 'Renamed project' })).status).toBe(200)
+    const unchangedProject = (await agent.get(`/api/v1/projects/${projectId}`).set(workspaceHeaders)).body.data
+    expect(unchangedProject).toMatchObject({ name: 'Renamed project', description: 'Keep this description', state: 'At risk', memberIds: [userId] })
+
+    expect((await agent.patch(`/api/v1/tasks/${taskId}`).set(workspaceHeaders).send({ title: 'Updated task' })).status).toBe(200)
+    const unchangedTask = (await agent.get(`/api/v1/tasks/${taskId}`).set(workspaceHeaders)).body.data
+    expect(unchangedTask).toMatchObject({ title: 'Updated task', description: 'Keep this task description', status: 'progress', priority: 'High', labels: ['keep'], order: 2 })
+
+    const explicit = await agent.patch(`/api/v1/tasks/${taskId}`).set(workspaceHeaders).send({ description: 'Updated description', status: 'done', priority: 'Low', labels: ['release'], order: 3 })
+    expect(explicit.status).toBe(200)
+    expect(explicit.body.data).toMatchObject({ description: 'Updated description', status: 'done', priority: 'Low', labels: ['release'], order: 3 })
+    expect((await agent.patch(`/api/v1/tasks/${taskId}`).set(workspaceHeaders).send({ order: 1.5 })).status).toBe(400)
+    expect((await agent.patch(`/api/v1/tasks/${taskId}`).set(workspaceHeaders).send({ labels: Array.from({ length: 21 }, (_, index) => `label-${index}`) })).status).toBe(400)
+    expect((await agent.patch(`/api/v1/projects/${projectId}`).set(workspaceHeaders).send({ memberIds: Array.from({ length: 101 }, (_, index) => `member-${index}`) })).status).toBe(400)
+  })
+
   it('keeps invitations pending until acceptance and scopes comments/activity', async (ctx) => {
     if (!databaseAvailable) ctx.skip()
     const owner = request.agent(app)

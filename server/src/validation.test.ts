@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { errorHandler, validate } from './middleware.js'
-import { projectBody, taskBody } from './routes.js'
+import { projectBody, projectPatch, taskBody, taskPatch } from './routes.js'
 
 describe('request collection validation', () => {
   it('accepts valid project and task collections within the documented limits', () => {
@@ -45,6 +45,32 @@ describe('request collection validation', () => {
       projectId: 'project-id',
       labels: ['l'.repeat(51)],
     })).toThrow()
+  })
+
+  it('keeps omitted PATCH fields absent while accepting explicit updates', () => {
+    const project = projectPatch.parse({ name: 'Renamed project' })
+    const task = taskPatch.parse({ title: 'Updated task' })
+    expect(project).toEqual({ name: 'Renamed project' })
+    expect(task).toEqual({ title: 'Updated task' })
+
+    expect(taskPatch.parse({ status: 'done', priority: 'High', labels: ['release'], description: 'Updated description', order: 3 })).toEqual({
+      status: 'done', priority: 'High', labels: ['release'], description: 'Updated description', order: 3,
+    })
+    expect(projectPatch.parse({ description: 'Updated description', state: 'At risk', memberIds: ['member-1'] })).toEqual({
+      description: 'Updated description', state: 'At risk', memberIds: ['member-1'],
+    })
+  })
+
+  it('requires task order to be a finite safe integer', () => {
+    expect(taskPatch.parse({ order: 0 }).order).toBe(0)
+    expect(() => taskPatch.parse({ order: 1.5 })).toThrow()
+    expect(() => taskPatch.parse({ order: Number.POSITIVE_INFINITY })).toThrow()
+  })
+
+  it('rejects invalid explicit PATCH values and oversized collections', () => {
+    expect(() => taskPatch.parse({ priority: 'Urgent' })).toThrow()
+    expect(() => taskPatch.parse({ labels: Array.from({ length: 21 }, (_, index) => `label-${index}`) })).toThrow()
+    expect(() => projectPatch.parse({ memberIds: Array.from({ length: 101 }, (_, index) => `member-${index}`) })).toThrow()
   })
 
   it('preserves the existing validation error response shape', () => {
