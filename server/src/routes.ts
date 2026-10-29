@@ -41,6 +41,19 @@ api.post('/auth/reset-password',authLimiter,validate({body:z.object({token:z.str
 api.get('/workspaces',requireAuth,async(req,res,next)=>{try{if(!req.auth)throw new HttpError(401,'Authentication required');const memberships=await WorkspaceMembership.find({userId:req.auth.user._id}).populate('workspaceId');ok(res,memberships.map((membership:any)=>({id:String(membership.workspaceId._id),name:membership.workspaceId.name,role:membership.role})))}catch(e){next(e)}})
 api.use(requireScope)
 
+const escapeRegex = (value:string) => value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+const searchQuery = z.object({q:z.string().trim().min(1).max(100),limit:z.coerce.number().int().min(1).max(25).default(8)})
+api.get('/search',validate({query:searchQuery}),async(req,res,next)=>{try{const {workspaceId,userId}=scope(req),q=escapeRegex(String(req.query.q)),limit=Number(req.query.limit),pattern={$regex:q,$options:'i'};const [projects,tasks,members,notifications,comments,activity]=await Promise.all([
+  Project.find({workspaceId,$or:[{name:pattern},{code:pattern},{description:pattern}]}).sort('-updatedAt').limit(limit),
+  Task.find({workspaceId,$or:[{title:pattern},{description:pattern},{labels:pattern}]}).sort('-updatedAt').limit(limit),
+  WorkspaceMembership.find({workspaceId}).populate({path:'userId',match:{$or:[{name:pattern},{email:pattern}]},select:'name email'}).limit(limit),
+  Notification.find({workspaceId,userId,$or:[{title:pattern},{body:pattern}]}).sort('-createdAt').limit(limit),
+  Comment.find({workspaceId,body:pattern}).populate('authorId','name email').populate('taskId','title projectId').sort('-createdAt').limit(limit),
+  ActivityLog.find({workspaceId,$or:[{action:pattern},{entityType:pattern}]}).populate('actorId','name email').sort('-createdAt').limit(limit)
+]);
+  ok(res,{projects:projects.map(clean),tasks:tasks.map(clean),members:members.filter((membership:any)=>membership.userId).map(clean),notifications:notifications.map(clean),comments:comments.map(clean),activity:activity.map(clean)})
+}catch(e){next(e)}})
+
 api.get('/projects',async(req,res,next)=>{try{const {workspaceId}=scope(req),{page:p,limit,skip}=page(req),filter=req.query.state?{state:String(req.query.state)}:{},sort=String(req.query.sort||'-updatedAt'),query=req.query.search?{name:{$regex:String(req.query.search),$options:'i'}}:{};const where={workspaceId,...filter,...query};const [items,total]=await Promise.all([Project.find(where).sort(sort).skip(skip).limit(limit),Project.countDocuments(where)]);ok(res,listResponse(items.map(clean),total,p,limit))}catch(e){next(e)}})
 api.post('/projects',authorize('owner','admin','member'),validate({body:projectBody}),async(req,res,next)=>{try{const {workspaceId,userId}=scope(req),p=await Project.create({...req.body,workspaceId});await recordActivity(workspaceId,userId,'created project','project',p._id);ok(res,clean(p),201)}catch(e){next(e)}})
 api.get('/projects/:id',validate({params:idParam}),async(req,res,next)=>{try{const {workspaceId}=scope(req),p=await Project.findOne({_id:objectId(String(req.params.id)),workspaceId});if(!p)throw new HttpError(404,'Project not found');ok(res,clean(p))}catch(e){next(e)}})
